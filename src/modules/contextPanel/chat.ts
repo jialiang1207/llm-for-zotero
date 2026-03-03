@@ -749,9 +749,8 @@ function buildMetadataReviewCard(
         statusMsg.textContent = `\u2713 ${applied} field${applied !== 1 ? "s" : ""} updated.`;
         card.classList.add("llm-mrc-done");
         const win = doc.defaultView;
-        refreshChat(body, item);
-        if (win) win.setTimeout(() => card.remove(), 1800);
-        else card.remove();
+        if (win) win.setTimeout(() => { card.remove(); refreshChat(body, item); }, 1800);
+        else { card.remove(); refreshChat(body, item); }
       }
     })();
   });
@@ -821,31 +820,72 @@ function buildNoteReviewCard(
         return;
       }
 
+      const parentItem = Zotero.Items.get(proposal.itemId) as Zotero.Item | false;
+      if (!parentItem) {
+        const errText = "Could not find the Zotero item \u2014 try reloading.";
+        statusMsg.textContent = `\u26A0 ${errText}`;
+        ztoolkit.log("LLM: Note save failed \u2013 item not found:", proposal.itemId);
+        saveBtn.disabled = false;
+        dismissBtn.disabled = false;
+        return;
+      }
+
+      // Delete the proposal BEFORE awaiting note.saveTx().
+      // note.saveTx() triggers Zotero\u2019s change notifier, which can fire
+      // onAsyncRender \u2192 buildUI \u2192 body.textContent="" \u2013 wiping the card before we
+      // can set the success message.  Deleting early means any mid-save re-render
+      // won\u2019t spawn a stale \u201cfresh\u201d card.  We restore the entry on failure.
+      pendingNoteProposals.delete(item.id);
+
+      let saveOutcome: "created" | "appended";
       try {
-        const parentItem = Zotero.Items.get(proposal.itemId) as Zotero.Item | false;
-        if (!parentItem) {
-          statusMsg.textContent = "\u26A0 Could not find the Zotero item.";
-          saveBtn.disabled = false;
-          dismissBtn.disabled = false;
-          return;
-        }
-        const saveOutcome = await createNoteFromAssistantText(
+        saveOutcome = await createNoteFromAssistantText(
           parentItem,
           editedContent,
           proposal.model || "agent",
         );
-        pendingNoteProposals.delete(item.id);
-        statusMsg.textContent = `\u2713 Note ${saveOutcome} in Zotero.`;
+      } catch (err) {
+        // Restore the proposal so the user can retry via the review card.
+        pendingNoteProposals.set(item.id, proposal);
+        const msg = err instanceof Error ? err.message : String(err);
+        ztoolkit.log("LLM: Note save failed:", err);
+        // If the card is still in the DOM, show the error inline.
+        if (card.isConnected) {
+          statusMsg.textContent = `\u26A0 ${msg}`;
+          saveBtn.disabled = false;
+          dismissBtn.disabled = false;
+        } else {
+          // Card was wiped by a panel re-render during the await \u2013 show a
+          // ProgressWindow (independent of card DOM) and re-render the card.
+          new ztoolkit.ProgressWindow("LLM for Zotero", {
+            closeOnClick: true,
+            closeTime: 5000,
+          })
+            .createLine({ type: "fail", text: `Note save failed: ${msg}` })
+            .show();
+          refreshChat(body, item);
+        }
+        return;
+      }
+
+      // Success \u2013 use a ProgressWindow so feedback survives card detachment.
+      new ztoolkit.ProgressWindow("LLM for Zotero", {
+        closeOnClick: true,
+        closeTime: 4000,
+      })
+        .createLine({
+          type: "success",
+          text: `Note ${saveOutcome} under \u201c${proposal.targetLabel}\u201d`,
+        })
+        .show();
+
+      // Also update the inline card if it\u2019s still attached.
+      if (card.isConnected) {
+        statusMsg.textContent = `\u2713 Note ${saveOutcome} in Zotero under \u201c${proposal.targetLabel}\u201d.`;
         card.classList.add("llm-mrc-done");
         const win = doc.defaultView;
-        refreshChat(body, item);
-        if (win) win.setTimeout(() => card.remove(), 1800);
-        else card.remove();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        statusMsg.textContent = `\u26A0 ${msg}`;
-        saveBtn.disabled = false;
-        dismissBtn.disabled = false;
+        if (win) win.setTimeout(() => { card.remove(); refreshChat(body, item); }, 1800);
+        else { card.remove(); refreshChat(body, item); }
       }
     })();
   });

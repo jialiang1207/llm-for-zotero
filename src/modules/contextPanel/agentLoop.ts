@@ -154,6 +154,7 @@ function buildToolContext(
   return {
     question: params.question,
     libraryID: Number(params.item.libraryID),
+    panelItemId: params.item.id,
     conversationMode: state.conversationMode,
     activePaperContext: state.activePaperContext,
     selectedPaperContexts: state.paperContexts,

@@ -55,6 +55,12 @@ export type AgentToolExecutionResult = {
 export type AgentToolExecutionContext = {
   question: string;
   libraryID: number;
+  /**
+   * The Zotero item ID of the panel/conversation item (may be a global portal
+   * item in open-chat mode, NOT the paper being acted on).  Used as the key
+   * for pending proposal maps so refreshChat can find them via item.id.
+   */
+  panelItemId: number;
   conversationMode: "paper" | "open";
   activePaperContext?: PaperContextRef | null;
   selectedPaperContexts: PaperContextRef[];

@@ -4158,6 +4158,19 @@ export function setupHandlers(body: Element, initialItem?: Zotero.Item | null) {
       closeHistoryMenu();
       closeHistoryNewMenu();
       if (isGlobalMode()) {
+        const libraryID = getCurrentLibraryID();
+        if (libraryID) {
+          // Explicit click always overrides the lock — clear it so
+          // resolveInitialPanelItemState doesn't snap back to global on the
+          // next onAsyncRender.
+          setLockedGlobalConversationKey(libraryID, null);
+        }
+        // When the lock was active, resolveInitialPanelItemState set
+        // basePaperItem to null.  Recover it from initialItem so that
+        // switchPaperConversation can find the paper to switch to.
+        if (!basePaperItem) {
+          basePaperItem = resolveConversationBaseItem(initialItem) ?? null;
+        }
         void switchPaperConversation();
       } else {
         void (async () => {

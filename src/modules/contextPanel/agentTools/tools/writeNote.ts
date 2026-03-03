@@ -16,7 +16,7 @@ import type {
 /** Approximate token budget for the paper context fed to the note writer. */
 const NOTE_PAPER_CONTEXT_TOKENS = 6000;
 /** Approximate token budget for the note generation output. */
-const NOTE_MAX_OUTPUT_TOKENS = 1200;
+const NOTE_MAX_OUTPUT_TOKENS = 8192;
 
 export function validateWriteNoteCall(call: AgentToolCall): AgentToolCall | null {
   const validated = validateSinglePaperToolCall("write_note", call);
@@ -69,18 +69,18 @@ export async function executeWriteNoteCall(
   // in the user `prompt` so the model sees them as the primary task request.
   const userPrompt = topicFocus
     ? [
-        "TASK: " + topicFocus,
-        "Follow the task instruction exactly. Do not add extra sections, headings, or content beyond what the task asks for.",
-        "",
-        "Paper:",
-        fullPaper.text,
-      ].join("\n")
+      "TASK: " + topicFocus,
+      "Follow the task instruction exactly. Do not add extra sections, headings, or content beyond what the task asks for.",
+      "",
+      "Paper:",
+      fullPaper.text,
+    ].join("\n")
     : [
-        "Write a structured research note for the following paper with these sections: Summary, Key Findings, Methodology, Limitations, Notes.",
-        "",
-        "Paper:",
-        fullPaper.text,
-      ].join("\n");
+      "Write a structured research note for the following paper with these sections: Summary, Key Findings, Methodology, Limitations, Notes.",
+      "",
+      "Paper:",
+      fullPaper.text,
+    ].join("\n");
 
   let noteContent: string;
   try {
@@ -107,7 +107,10 @@ export async function executeWriteNoteCall(
 
   // Store note as a pending proposal so the user can review, edit, and
   // save it via the review panel in the chat UI.
-  pendingNoteProposals.set(target.paperContext.itemId, {
+  // Key by ctx.panelItemId (the panel/conversation item) so refreshChat's
+  // pendingNoteProposals.get(item.id) finds it in both paper and open-chat mode.
+  // proposal.itemId stays as the paper's item ID so the note is saved correctly.
+  pendingNoteProposals.set(ctx.panelItemId, {
     itemId: target.paperContext.itemId,
     targetLabel: target.targetLabel,
     content: noteContent,

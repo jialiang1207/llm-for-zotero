@@ -97,6 +97,7 @@ describe("agentToolTarget", function () {
     return {
       question: "read full paper",
       libraryID: 5,
+      panelItemId: 0,
       conversationMode: "open",
       activePaperContext: activePaper,
       selectedPaperContexts: [selectedPaper],

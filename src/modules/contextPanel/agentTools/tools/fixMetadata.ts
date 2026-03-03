@@ -250,8 +250,10 @@ export async function executeFixMetadataCall(
     };
   }
 
-  // ── Store proposals for the UI (keyed by PARENT item ID) ─────────────────
-  pendingMetadataProposals.set(target.paperContext.itemId, {
+  // ── Store proposals for the UI (keyed by PANEL item ID for refreshChat) ──
+  // Using ctx.panelItemId so refreshChat's pendingMetadataProposals.get(item.id)
+  // resolves correctly in both paper-chat and open-chat modes.
+  pendingMetadataProposals.set(ctx.panelItemId, {
     itemId: target.paperContext.itemId,
     targetLabel: target.targetLabel,
     fields: fieldProposals,
