@@ -22,6 +22,171 @@
 
       <html:div style="display: flex; flex-direction: column; gap: 4px">
         <html:label
+          style="
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--fill-primary, inherit);
+          "
+        >
+          <html:input
+            id="__addonRef__-custom-embedding-enabled"
+            type="checkbox"
+          ></html:input>
+          Enable Custom Embedding Model
+        </html:label>
+        <html:span style="font-size: 11px; color: var(--fill-secondary, #888); margin-top: 1px; display: block;">
+          Turn off to use the default embedding model automatically.
+        </html:span>
+      </html:div>
+
+      <html:div style="display: flex; flex-direction: column; gap: 4px">
+        <html:label
+          for="__addonRef__-embedding-model"
+          style="display: block; font-weight: 600; font-size: 12px; color: var(--fill-primary, inherit); margin-bottom: 4px;"
+        >
+          Embedding Model
+        </html:label>
+        <html:input
+          id="__addonRef__-embedding-model"
+          type="text"
+          placeholder="text-embedding-3-small"
+          style="
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 13px;
+            border: 1px solid var(--stroke-secondary, #c8c8c8);
+            border-radius: 6px;
+            box-sizing: border-box;
+            background: Field;
+            color: FieldText;
+          "
+        ></html:input>
+        <html:div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+          <html:button
+            id="__addonRef__-embedding-test-btn"
+            type="button"
+            style="
+              padding: 4px 10px;
+              font-size: 12px;
+              font-weight: 500;
+              white-space: nowrap;
+              background: transparent;
+              color: var(--color-accent, #2563eb);
+              border: 1px solid var(--color-accent, #2563eb);
+              border-radius: 5px;
+              cursor: pointer;
+            "
+          >
+            Test Embedding Connection
+          </html:button>
+          <html:span
+            id="__addonRef__-embedding-test-status"
+            style="font-size: 11px; color: var(--fill-secondary, #888);"
+          ></html:span>
+        </html:div>
+        <html:span style="font-size: 11px; color: var(--fill-secondary, #888); margin-top: 3px; display: block;">
+          Used for retrieval embeddings. Must be compatible with your configured API endpoint.
+        </html:span>
+      </html:div>
+
+      <html:div style="display: flex; flex-direction: column; gap: 4px">
+        <html:label
+          style="
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--fill-primary, inherit);
+          "
+        >
+          <html:input
+            id="__addonRef__-structured-output-enabled"
+            type="checkbox"
+          ></html:input>
+          Enable Structured Output (JSON Schema)
+        </html:label>
+        <html:span style="font-size: 11px; color: var(--fill-secondary, #888); margin-top: 1px; display: block;">
+          When enabled, requests include response_format=json_schema.
+        </html:span>
+      </html:div>
+
+      <html:div style="display: flex; flex-direction: column; gap: 4px">
+        <html:label
+          for="__addonRef__-structured-output-schema-name"
+          style="display: block; font-weight: 600; font-size: 12px; color: var(--fill-primary, inherit); margin-bottom: 4px;"
+        >
+          Structured Output Schema Name
+        </html:label>
+        <html:input
+          id="__addonRef__-structured-output-schema-name"
+          type="text"
+          placeholder="structured_output"
+          style="
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 13px;
+            border: 1px solid var(--stroke-secondary, #c8c8c8);
+            border-radius: 6px;
+            box-sizing: border-box;
+            background: Field;
+            color: FieldText;
+          "
+        ></html:input>
+      </html:div>
+
+      <html:div style="display: flex; flex-direction: column; gap: 4px">
+        <html:label
+          style="
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--fill-primary, inherit);
+          "
+        >
+          <html:input
+            id="__addonRef__-structured-output-strict"
+            type="checkbox"
+          ></html:input>
+          Strict Schema Validation
+        </html:label>
+      </html:div>
+
+      <html:div style="display: flex; flex-direction: column; gap: 4px">
+        <html:label
+          for="__addonRef__-structured-output-schema"
+          style="display: block; font-weight: 600; font-size: 12px; color: var(--fill-primary, inherit); margin-bottom: 4px;"
+        >
+          Structured Output JSON Schema
+        </html:label>
+        <html:textarea
+          id="__addonRef__-structured-output-schema"
+          rows="6"
+          placeholder='{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}'
+          style="
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 13px;
+            border: 1px solid var(--stroke-secondary, #c8c8c8);
+            border-radius: 6px;
+            box-sizing: border-box;
+            resize: vertical;
+            background: Field;
+            color: FieldText;
+          "
+        ></html:textarea>
+        <html:span style="font-size: 11px; color: var(--fill-secondary, #888); margin-top: 3px; display: block;">
+          Enter valid JSON Schema. Invalid JSON will be ignored at runtime.
+        </html:span>
+      </html:div>
+
+      <html:div style="display: flex; flex-direction: column; gap: 4px">
+        <html:label
           for="__addonRef__-system-prompt"
           style="display: block; font-weight: 600; font-size: 12px; color: var(--fill-primary, inherit); margin-bottom: 4px;"
         >

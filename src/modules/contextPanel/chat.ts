@@ -15,6 +15,7 @@ import {
   ChatMessage,
   getRuntimeReasoningOptions,
   ReasoningConfig as LLMReasoningConfig,
+  StructuredOutputConfig as LLMStructuredOutputConfig,
   ReasoningEvent,
   ReasoningLevel as LLMReasoningLevel,
   UsageStats,
@@ -89,6 +90,7 @@ import {
   getLastReasoningExpanded,
   getLastUsedReasoningLevel,
   getSelectedModelEntryForItem,
+  getStructuredOutputConfigForRequest,
   getStringPref,
   setLastReasoningExpanded,
 } from "./prefHelpers";
@@ -961,6 +963,7 @@ type EffectiveRequestConfig = {
   modelEntryId?: string;
   modelProviderLabel?: string;
   reasoning: LLMReasoningConfig | undefined;
+  structuredOutput: LLMStructuredOutputConfig | undefined;
   advanced: AdvancedModelParams | undefined;
 };
 
@@ -1000,6 +1003,7 @@ function resolveEffectiveRequestConfig(params: {
     params.advanced ||
     getAdvancedModelParamsForEntry(fallbackEntry?.entryId) ||
     fallbackEntry?.advanced;
+  const structuredOutput = getStructuredOutputConfigForRequest();
   return {
     model,
     apiBase,
@@ -1011,6 +1015,7 @@ function resolveEffectiveRequestConfig(params: {
       explicitEntry?.providerLabel ||
       fallbackEntry?.providerLabel,
     reasoning,
+    structuredOutput,
     advanced,
   };
 }
@@ -1634,6 +1639,7 @@ export async function retryLatestAssistantResponse(
         apiBase: effectiveRequestConfig.apiBase,
         apiKey: effectiveRequestConfig.apiKey,
         reasoning: effectiveRequestConfig.reasoning,
+        structuredOutput: effectiveRequestConfig.structuredOutput,
         temperature: effectiveRequestConfig.advanced?.temperature,
         maxTokens: effectiveRequestConfig.advanced?.maxTokens,
         inputTokenCap: effectiveRequestConfig.advanced?.inputTokenCap,
@@ -2050,6 +2056,7 @@ export async function sendQuestion(
         apiBase: effectiveRequestConfig.apiBase,
         apiKey: effectiveRequestConfig.apiKey,
         reasoning: effectiveRequestConfig.reasoning,
+        structuredOutput: effectiveRequestConfig.structuredOutput,
         temperature: effectiveRequestConfig.advanced?.temperature,
         maxTokens: effectiveRequestConfig.advanced?.maxTokens,
         inputTokenCap: effectiveRequestConfig.advanced?.inputTokenCap,

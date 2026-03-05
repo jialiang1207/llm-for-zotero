@@ -14,3 +14,7 @@ tsconfig.tsbuildinfo
 .scaffold
 build
 logs
+
+# docker config
+Dockerfile.*
+docker-compose.*

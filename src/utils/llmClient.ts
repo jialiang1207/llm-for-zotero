@@ -94,6 +94,15 @@ export type ChatFileAttachment = {
   contentHash?: string;
 };
 
+export type StructuredOutputConfig = {
+  /** Optional schema name used by JSON schema response format. */
+  name?: string;
+  /** JSON schema object expected from the model. */
+  schema: Record<string, unknown>;
+  /** Whether provider should enforce strict schema matching. */
+  strict?: boolean;
+};
+
 export type ChatParams = {
   prompt: string;
   context?: string;
@@ -119,6 +128,8 @@ export type ChatParams = {
   inputTokenCap?: number;
   /** Local files to upload and attach when using Responses API */
   attachments?: ChatFileAttachment[];
+  /** Optional structured output contract (JSON schema). */
+  structuredOutput?: StructuredOutputConfig;
 };
 
 export type ReasoningEvent = {
@@ -161,8 +172,8 @@ interface StreamChoice {
 
 interface CompletionResponse {
   choices?: Array<{
-    message?: { content?: string };
-    text?: string;
+    message?: { content?: unknown };
+    text?: unknown;
   }>;
 }
 
@@ -194,6 +205,16 @@ const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 
 const prefKey = (key: string) => `${config.prefsPrefix}.${key}`;
 const getPref = (key: string) => Zotero.Prefs.get(prefKey(key), true) as string;
+const getBooleanPref = (key: string, fallback = false): boolean => {
+  const value = Zotero.Prefs.get(prefKey(key), true) as unknown;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return fallback;
+};
 
 function getApiConfig(overrides?: {
   apiBase?: string;
@@ -223,7 +244,13 @@ function getApiConfig(overrides?: {
     getPref("model") ||
     DEFAULT_MODEL;
   const model = (overrides?.model || modelPrimary).trim();
-  const embeddingModel = getPref("embeddingModel") || DEFAULT_EMBEDDING_MODEL;
+  const customEmbeddingModelEnabled = getBooleanPref(
+    "customEmbeddingModelEnabled",
+    true,
+  );
+  const embeddingModel = customEmbeddingModelEnabled
+    ? getPref("embeddingModel") || DEFAULT_EMBEDDING_MODEL
+    : DEFAULT_EMBEDDING_MODEL;
   const customSystemPrompt = getPref("systemPrompt") || "";
 
   if (!apiBase) {
@@ -895,6 +922,40 @@ function buildResponsesTokenParam(maxTokens: number) {
   return { max_output_tokens: maxTokens };
 }
 
+function normalizeStructuredOutputConfig(
+  config: StructuredOutputConfig | undefined,
+): StructuredOutputConfig | null {
+  if (!config || typeof config !== "object") return null;
+  if (!config.schema || typeof config.schema !== "object") return null;
+  if (Array.isArray(config.schema)) return null;
+  const name =
+    typeof config.name === "string" && config.name.trim()
+      ? config.name.trim().replace(/[^a-zA-Z0-9_-]/g, "_")
+      : "structured_output";
+  return {
+    name,
+    schema: config.schema,
+    strict: config.strict === true,
+  };
+}
+
+function buildStructuredOutputPayload(
+  config: StructuredOutputConfig | undefined,
+): Record<string, unknown> {
+  const normalized = normalizeStructuredOutputConfig(config);
+  if (!normalized) return {};
+  return {
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: normalized.name,
+        schema: normalized.schema,
+        strict: normalized.strict,
+      },
+    },
+  };
+}
+
 const OPENAI_EFFORT_ORDER: OpenAIReasoningEffort[] = [
   "none",
   "minimal",
@@ -1332,6 +1393,7 @@ function createChatPayloadBuilder(params: {
   effectiveTemperature: number;
   effectiveMaxTokens: number;
   stream: boolean;
+  structuredOutput?: StructuredOutputConfig;
 }) {
   const {
     model,
@@ -1342,6 +1404,7 @@ function createChatPayloadBuilder(params: {
     effectiveTemperature,
     effectiveMaxTokens,
     stream,
+    structuredOutput,
   } = params;
   return (reasoningOverride: ReasoningConfig | undefined) => {
     const reasoningPayload = buildReasoningPayload(
@@ -1359,6 +1422,7 @@ function createChatPayloadBuilder(params: {
           model,
           ...buildResponsesInput(messages, responseFileIds),
           ...reasoningPayload.extra,
+          ...buildStructuredOutputPayload(structuredOutput),
           ...temperatureParam,
           ...buildResponsesTokenParam(effectiveMaxTokens),
         }
@@ -1366,6 +1430,7 @@ function createChatPayloadBuilder(params: {
           model,
           messages,
           ...reasoningPayload.extra,
+          ...buildStructuredOutputPayload(structuredOutput),
           ...temperatureParam,
           ...buildTokenParam(model, effectiveMaxTokens),
         };
@@ -1617,16 +1682,50 @@ async function postWithReasoningFallback(params: {
 function extractResponsesOutputText(data: {
   output_text?: string;
   output?: Array<{
-    content?: Array<{ type?: string; text?: string }>;
+    content?: Array<{
+      type?: string;
+      text?: string;
+      json?: unknown;
+      output_json?: unknown;
+      value?: unknown;
+    }>;
   }>;
 }): string {
   if (data?.output_text) return data.output_text;
-  const firstText =
-    data?.output
-      ?.flatMap((item) => item.content || [])
-      .find((content) => content.type === "output_text" && content.text)
-      ?.text || "";
+  const firstStructured = data?.output
+    ?.flatMap((item) => item.content || [])
+    .find(
+      (content) =>
+        content &&
+        typeof content === "object" &&
+        (Object.prototype.hasOwnProperty.call(content, "json") ||
+          Object.prototype.hasOwnProperty.call(content, "output_json") ||
+          Object.prototype.hasOwnProperty.call(content, "value")),
+    );
+  if (firstStructured) {
+    const payload =
+      firstStructured.json ??
+      firstStructured.output_json ??
+      firstStructured.value;
+    if (payload !== undefined) {
+      return typeof payload === "string" ? payload : JSON.stringify(payload);
+    }
+  }
+  const firstText = data?.output
+    ?.flatMap((item) => item.content || [])
+    .find((content) => typeof content.text === "string" && content.text.trim())
+    ?.text;
   return firstText || JSON.stringify(data);
+}
+
+function stringifyNonStringContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (content === null || content === undefined) return "";
+  try {
+    return JSON.stringify(content);
+  } catch (_err) {
+    return String(content);
+  }
 }
 
 // =============================================================================
@@ -1683,6 +1782,7 @@ export async function callLLM(params: ChatParams): Promise<string> {
     effectiveTemperature,
     effectiveMaxTokens,
     stream: false,
+    structuredOutput: params.structuredOutput,
   });
   const res = await postWithReasoningFallback({
     url,
@@ -1700,11 +1800,14 @@ export async function callLLM(params: ChatParams): Promise<string> {
   if (useResponses) {
     return extractResponsesOutputText(data);
   }
-  return (
-    data?.choices?.[0]?.message?.content ??
-    data?.choices?.[0]?.text ??
-    JSON.stringify(data)
-  );
+  const messageContent = data?.choices?.[0]?.message?.content;
+  if (messageContent !== undefined) {
+    return stringifyNonStringContent(messageContent);
+  }
+  if (data?.choices?.[0]?.text !== undefined) {
+    return stringifyNonStringContent(data.choices?.[0]?.text);
+  }
+  return JSON.stringify(data);
 }
 
 /**
@@ -1762,6 +1865,7 @@ export async function callLLMStream(
     effectiveTemperature,
     effectiveMaxTokens,
     stream: true,
+    structuredOutput: params.structuredOutput,
   });
   const res = await postWithReasoningFallback({
     url,

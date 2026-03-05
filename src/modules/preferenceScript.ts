@@ -24,7 +24,14 @@ import {
   type ModelProviderModel,
 } from "../utils/modelProviders";
 
-type PrefKey = "systemPrompt";
+type PrefKey =
+  | "systemPrompt"
+  | "embeddingModel"
+  | "structuredOutputSchemaName"
+  | "structuredOutputSchema";
+
+const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+const DEFAULT_STRUCTURED_OUTPUT_SCHEMA_NAME = "structured_output";
 
 const pref = (key: PrefKey) => `${config.prefsPrefix}.${key}`;
 
@@ -188,6 +195,30 @@ export async function registerPrefsScripts(_window: Window | undefined | null) {
   ) as HTMLDivElement | null;
   const systemPromptInput = doc.querySelector(
     `#${config.addonRef}-system-prompt`,
+  ) as HTMLTextAreaElement | null;
+  const embeddingModelInput = doc.querySelector(
+    `#${config.addonRef}-embedding-model`,
+  ) as HTMLInputElement | null;
+  const customEmbeddingEnabledInput = doc.querySelector(
+    `#${config.addonRef}-custom-embedding-enabled`,
+  ) as HTMLInputElement | null;
+  const embeddingTestBtn = doc.querySelector(
+    `#${config.addonRef}-embedding-test-btn`,
+  ) as HTMLButtonElement | null;
+  const embeddingTestStatus = doc.querySelector(
+    `#${config.addonRef}-embedding-test-status`,
+  ) as HTMLSpanElement | null;
+  const structuredOutputEnabledInput = doc.querySelector(
+    `#${config.addonRef}-structured-output-enabled`,
+  ) as HTMLInputElement | null;
+  const structuredOutputSchemaNameInput = doc.querySelector(
+    `#${config.addonRef}-structured-output-schema-name`,
+  ) as HTMLInputElement | null;
+  const structuredOutputStrictInput = doc.querySelector(
+    `#${config.addonRef}-structured-output-strict`,
+  ) as HTMLInputElement | null;
+  const structuredOutputSchemaInput = doc.querySelector(
+    `#${config.addonRef}-structured-output-schema`,
   ) as HTMLTextAreaElement | null;
   const popupAddTextEnabledInput = doc.querySelector(
     `#${config.addonRef}-popup-add-text-enabled`,
@@ -590,6 +621,171 @@ export async function registerPrefsScripts(_window: Window | undefined | null) {
     systemPromptInput.value = getPref("systemPrompt") || "";
     systemPromptInput.addEventListener("input", () => {
       setPref("systemPrompt", systemPromptInput.value);
+    });
+  }
+
+  if (embeddingModelInput) {
+    embeddingModelInput.value =
+      getPref("embeddingModel") || DEFAULT_EMBEDDING_MODEL;
+    embeddingModelInput.addEventListener("input", () => {
+      setPref("embeddingModel", embeddingModelInput.value.trim());
+    });
+  }
+
+  const syncEmbeddingControls = () => {
+    if (!embeddingModelInput) return;
+    const enabled = customEmbeddingEnabledInput
+      ? customEmbeddingEnabledInput.checked
+      : true;
+    embeddingModelInput.disabled = !enabled;
+    embeddingModelInput.style.opacity = enabled ? "1" : "0.6";
+    if (embeddingTestStatus && !enabled) {
+      embeddingTestStatus.textContent =
+        "Custom embedding model is disabled; default model will be used.";
+      embeddingTestStatus.style.color = "var(--fill-secondary, #888)";
+    }
+  };
+
+  if (customEmbeddingEnabledInput) {
+    const prefValue = Zotero.Prefs.get(
+      `${config.prefsPrefix}.customEmbeddingModelEnabled`,
+      true,
+    );
+    customEmbeddingEnabledInput.checked =
+      prefValue !== false && `${prefValue || ""}`.toLowerCase() !== "false";
+    customEmbeddingEnabledInput.addEventListener("change", () => {
+      Zotero.Prefs.set(
+        `${config.prefsPrefix}.customEmbeddingModelEnabled`,
+        customEmbeddingEnabledInput.checked,
+        true,
+      );
+      syncEmbeddingControls();
+    });
+  }
+
+  syncEmbeddingControls();
+
+  if (embeddingTestBtn && embeddingTestStatus) {
+    const runEmbeddingTest = async () => {
+      embeddingTestBtn.disabled = true;
+      embeddingTestStatus.textContent = "Testing...";
+      embeddingTestStatus.style.color = "var(--fill-secondary, #888)";
+
+      try {
+        const activeGroup =
+          groups.find((group) => group.apiBase.trim()) ||
+          groups[0] ||
+          createEmptyProviderGroup();
+        const apiBase =
+          activeGroup.apiBase.trim().replace(/\/$/, "") ||
+          (Zotero.Prefs.get(`${config.prefsPrefix}.apiBase`, true) as string) ||
+          "";
+        const apiKey =
+          activeGroup.apiKey.trim() ||
+          (Zotero.Prefs.get(`${config.prefsPrefix}.apiKey`, true) as string) ||
+          "";
+        const embeddingModel =
+          customEmbeddingEnabledInput?.checked
+            ? (embeddingModelInput?.value || "").trim() ||
+              DEFAULT_EMBEDDING_MODEL
+            : DEFAULT_EMBEDDING_MODEL;
+
+        if (!apiBase) throw new Error("API URL is required");
+
+        const testUrl = resolveEndpoint(apiBase, "/v1/embeddings");
+        const headers = buildHeaders(apiKey);
+        const payload = {
+          model: embeddingModel,
+          input: ["ping"],
+        };
+
+        const fetchFn = ztoolkit.getGlobal("fetch") as typeof fetch;
+        const response = await fetchFn(testUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const data = (await response.json()) as {
+          data?: Array<{ embedding?: number[] }>;
+        };
+        const vectorLength = Array.isArray(data?.data?.[0]?.embedding)
+          ? data.data?.[0]?.embedding?.length || 0
+          : 0;
+        if (!vectorLength) {
+          throw new Error("No embedding vector returned by provider");
+        }
+
+        embeddingTestStatus.textContent =
+          `Success - vector size: ${vectorLength}`;
+        embeddingTestStatus.style.color = "green";
+      } catch (error) {
+        embeddingTestStatus.textContent = `Error: ${(error as Error).message}`;
+        embeddingTestStatus.style.color = "red";
+      } finally {
+        embeddingTestBtn.disabled = false;
+      }
+    };
+
+    embeddingTestBtn.addEventListener("click", () => void runEmbeddingTest());
+    embeddingTestBtn.addEventListener("command", () =>
+      void runEmbeddingTest(),
+    );
+  }
+
+  if (structuredOutputEnabledInput) {
+    const prefValue = Zotero.Prefs.get(
+      `${config.prefsPrefix}.structuredOutputEnabled`,
+      true,
+    );
+    structuredOutputEnabledInput.checked =
+      prefValue === true || `${prefValue || ""}`.toLowerCase() === "true";
+    structuredOutputEnabledInput.addEventListener("change", () => {
+      Zotero.Prefs.set(
+        `${config.prefsPrefix}.structuredOutputEnabled`,
+        structuredOutputEnabledInput.checked,
+        true,
+      );
+    });
+  }
+
+  if (structuredOutputSchemaNameInput) {
+    structuredOutputSchemaNameInput.value =
+      getPref("structuredOutputSchemaName") ||
+      DEFAULT_STRUCTURED_OUTPUT_SCHEMA_NAME;
+    structuredOutputSchemaNameInput.addEventListener("input", () => {
+      setPref(
+        "structuredOutputSchemaName",
+        structuredOutputSchemaNameInput.value.trim(),
+      );
+    });
+  }
+
+  if (structuredOutputStrictInput) {
+    const prefValue = Zotero.Prefs.get(
+      `${config.prefsPrefix}.structuredOutputStrict`,
+      true,
+    );
+    structuredOutputStrictInput.checked =
+      prefValue === true || `${prefValue || ""}`.toLowerCase() === "true";
+    structuredOutputStrictInput.addEventListener("change", () => {
+      Zotero.Prefs.set(
+        `${config.prefsPrefix}.structuredOutputStrict`,
+        structuredOutputStrictInput.checked,
+        true,
+      );
+    });
+  }
+
+  if (structuredOutputSchemaInput) {
+    structuredOutputSchemaInput.value = getPref("structuredOutputSchema") || "";
+    structuredOutputSchemaInput.addEventListener("input", () => {
+      setPref("structuredOutputSchema", structuredOutputSchemaInput.value);
     });
   }
 

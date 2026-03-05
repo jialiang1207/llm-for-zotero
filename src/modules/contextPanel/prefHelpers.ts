@@ -16,6 +16,7 @@ import {
   type ModelProviderGroup,
   type RuntimeModelEntry,
 } from "../../utils/modelProviders";
+import type { StructuredOutputConfig } from "../../utils/llmClient";
 
 type ZoteroPrefsAPI = {
   get?: (key: string, global?: boolean) => unknown;
@@ -31,6 +32,44 @@ function getZoteroPrefs(): ZoteroPrefsAPI | null {
 export function getStringPref(key: string): string {
   const value = getZoteroPrefs()?.get?.(`${config.prefsPrefix}.${key}`, true);
   return typeof value === "string" ? value : "";
+}
+
+export function getBooleanPref(key: string, fallback = false): boolean {
+  const value = getZoteroPrefs()?.get?.(`${config.prefsPrefix}.${key}`, true);
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return fallback;
+}
+
+export function getStructuredOutputConfigForRequest():
+  | StructuredOutputConfig
+  | undefined {
+  const enabled = getBooleanPref("structuredOutputEnabled", false);
+  if (!enabled) return undefined;
+
+  const schemaText = getStringPref("structuredOutputSchema").trim();
+  if (!schemaText) return undefined;
+
+  try {
+    const parsed = JSON.parse(schemaText) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const name =
+      getStringPref("structuredOutputSchemaName").trim() ||
+      "structured_output";
+    return {
+      name,
+      schema: parsed as Record<string, unknown>,
+      strict: getBooleanPref("structuredOutputStrict", false),
+    };
+  } catch (_err) {
+    return undefined;
+  }
 }
 
 const LAST_REASONING_LEVEL_PREF_KEY = "lastUsedReasoningLevel";

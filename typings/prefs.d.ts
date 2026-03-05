@@ -12,6 +12,12 @@ declare namespace _ZoteroTypes {
       "apiBase": string;
       "apiKey": string;
       "model": string;
+      "customEmbeddingModelEnabled": boolean;
+      "embeddingModel": string;
+      "structuredOutputEnabled": boolean;
+      "structuredOutputSchemaName": string;
+      "structuredOutputStrict": boolean;
+      "structuredOutputSchema": string;
       "modelProviderGroups": string;
       "modelProviderGroupsMigrationVersion": number;
       "lastUsedModelEntryId": string;
